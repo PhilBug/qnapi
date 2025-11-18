@@ -52,6 +52,7 @@ qnapi/                  # Root project file (qnapi.pro)
 ├── gui/               # Qt5 GUI application
 ├── cli/               # Command-line interface application
 ├── deps/              # Third-party dependencies (libmediainfo, libmaia)
+├── flathub/           # Flatpak manifest files for distribution
 └── translations/      # Internationalization files
 ```
 
@@ -81,7 +82,7 @@ The core functionality is organized into several key modules:
   - Format implementations: MicroDVD, MPL2, SubRip, TMPlayer
 
 - **Utilities** (`src/utils/`):
-  - `P7ZipDecoder`: 7z archive extraction
+  - `P7ZipDecoder`: **CRITICAL** - 7z archive extraction required for subtitle download engines
   - `SyncHttp`, `SyncXmlRpc`: Network communication
   - `EncodingUtils`: Text encoding handling
   - `Console`: CLI output formatting
@@ -113,7 +114,7 @@ The core functionality is organized into several key modules:
 ### Runtime Dependencies
 
 - **Qt 5.2+**: Core framework (network, xml, gui widgets)
-- **p7zip**: Archive extraction (pre-built binaries provided for Windows/OSX)
+- **p7zip (7za)**: **CRITICAL** - Archive extraction for subtitle files, especially password-protected 7z archives from NapiProjekt engine
 - **libmediainfo**: Movie file metadata extraction
 
 ### Build Dependencies
@@ -148,6 +149,49 @@ No automated test suite is currently present. Manual testing involves:
 - Testing each subtitle engine with various file formats
 - Verifying subtitle conversion between formats
 - CLI argument parsing validation
+- **CRITICAL**: Always test p7zip/7za integration when making Flatpak changes - QNapi cannot extract downloaded subtitles without it
+
+### Flatpak Distribution (flathub/)
+
+**IMPORTANT**: QNapi Flatpak packaging is maintained separately from the main source repository in the `flathub/` directory.
+
+#### Key Components
+
+- **Manifest**: `io.github.qnapi.yaml` - Flatpak build configuration
+- **Metadata**: `io.github.qnapi.metainfo.xml` - App store information
+
+#### Critical Dependencies
+
+- **Runtime**: `org.kde.Platform 5.15-24.08 LTS` (current supported version)
+- **p7zip**: **ESSENTIAL** - Must include working `7za` binary for subtitle extraction
+  - Used by `P7ZipDecoder` class in `src/utils/p7zipdecoder.h`
+  - Required for NapiProjekt engine (password-protected 7z archives)
+  - Source compilation has C++17 compatibility issues - binary inclusion preferred
+
+#### Build Process
+
+```bash
+# Build and install Flatpak
+cd flathub/
+flatpak-builder --force-clean --user --install build-dir io.github.qnapi.yaml
+
+# Test critical functionality
+flatpak run --command=sh io.github.qnapi -c "7z"  # Verify 7zip works
+flatpak run io.github.qnapi --help                # Verify app launches
+```
+
+#### Runtime Updates
+
+- KDE Platform versions age out and require migration
+- Monitor for EOL warnings and update `runtime-version` in manifest
+- Current LTS runtime: 5.15-24.08 (supported through 2025)
+- Always test subtitle download functionality after runtime updates
+
+#### Known Issues
+
+- p7zip source code incompatible with modern C++17 standards
+- Flatpak build isolation prevents direct system binary access
+- Solution: Copy system `7za` binary into Flatpak sources during build
 
 ### Useful Context7 MCP Integration
 
